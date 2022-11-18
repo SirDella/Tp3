@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="imagen_size">76sp</dimen>
+    <dimen name="act_detalle_img_size">200sp</dimen>
+    <dimen name="act_detalle_text_nombre_size">30sp</dimen>
+    <dimen name="act_detalle_text_chico">18sp</dimen>
+</resources>
