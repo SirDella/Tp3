@@ -1,24 +1,15 @@
 package com.sirdella.tp2
 
 import android.content.Context
-import android.content.Intent
 import android.graphics.Color
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.provider.Settings.Global.getString
 import android.util.Log
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import android.widget.ImageView
-import android.widget.ProgressBar
-import android.widget.TextView
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
-import androidx.core.content.ContextCompat.startActivity
-import androidx.loader.content.Loader
-import androidx.recyclerview.widget.RecyclerView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.*
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.bumptech.glide.Glide
-import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import retrofit2.Call
@@ -28,18 +19,83 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Query
-import kotlin.concurrent.thread
+import kotlin.coroutines.coroutineContext
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        //Recycler:
-        rvLista = findViewById<RecyclerView>(R.id.lista)
-        adapterUsuario = UsuarioAdapter(this)
-        rvLista.adapter = adapterUsuario
+        //ViewModel:
+        val viewmodel = ViewModelProvider(this).get(viewModel::class.java)
 
+        //Fragments:
+        if (supportFragmentManager.findFragmentById(R.id.contenedor) == null) mostrarLista()
+    }
+
+    fun mostrarLista(){
+        val fragment = supportFragmentManager.fragmentFactory.instantiate(classLoader, fragment_lista::class.java.name)
+        supportFragmentManager.beginTransaction().add(R.id.contenedor, fragment).commit()
+    }
+
+    fun mostrarDetalle(usuario: UsuarioDC){
+        val fragment = supportFragmentManager.fragmentFactory.instantiate(classLoader, fragment_detalle::class.java.name)
+
+        val arguments = Bundle()
+        arguments.putString("nombre", usuario.nombre)
+        arguments.putString("edad", usuario.edad)
+        arguments.putString("pais", usuario.pais)
+        arguments.putString("correo", usuario.correo)
+        arguments.putString("numero", usuario.numero)
+        arguments.putString("codigoPostal", usuario.codigoPostal)
+        arguments.putString("fotoGrande", usuario.fotoGrande)
+
+        fragment.arguments = arguments
+
+        supportFragmentManager.beginTransaction().setCustomAnimations(R.anim.slide_in, R.anim.slide_out, R.anim.slide_in, R.anim.slide_out).add(R.id.contenedor, fragment).addToBackStack(null).commit()
+    }
+}
+
+//region ViewModel ----------------------------------------------------------------------------------
+class viewModel():ViewModel(){
+    val repoUsuarios = claseServicioRug()
+
+    private val _recargando = MutableLiveData<Boolean>()
+    val recargando: LiveData<Boolean> = _recargando
+
+    private val _listaUsuariosLD = MutableLiveData<ArrayList<UsuarioDC>>()
+    val listaUsuariosLD: LiveData<ArrayList<UsuarioDC>> = _listaUsuariosLD
+
+    fun actualizarUsuarios(){
+        _recargando.value = true
+        repoUsuarios.obtenerUsuarios(callbackResultados = {
+            _listaUsuariosLD.value = it
+            _recargando.value = false
+        })
+    }
+}
+//endregion
+
+//region Datos -------------------------------------------------------------------------------------------------
+data class UsuarioDC(
+    var fotoChica: String = "",
+    var nombre: String = "",
+    var edad: String = "",
+    var pais: String = "",
+    var correo: String = "",
+    var numero: String = "",
+    var codigoPostal: String = "",
+    var fotoGrande: String = "",
+)
+
+//endregion
+
+//region Cosas de Retrofit/Moshi ------------------------------------------------------------------------------
+
+class claseServicioRug {
+    private var servicioRug: ServicioRug
+
+    init {
         //Moshi:
         val moshi: Moshi = Moshi.Builder()
             .add(KotlinJsonAdapterFactory())
@@ -52,24 +108,7 @@ class MainActivity : AppCompatActivity() {
             .addConverterFactory(conversorMoshi)
             .build()
         servicioRug = retrofit.create(ServicioRug::class.java)
-
-        //SwipeRefreshLayout:
-        val refreshLayout = findViewById<SwipeRefreshLayout>(R.id.refreshLayout)
-        refreshLayout.setOnRefreshListener {
-            thread{
-                obtenerUsuarios(this)
-            }
-        }
-        refreshLayout.isRefreshing = true
-
-        thread {
-            obtenerUsuarios(this)
-        }
     }
-
-    //region Cosas de Retrofit/Moshi ------------------------------------------------------------------------------
-
-    private lateinit var servicioRug: ServicioRug
 
     interface ServicioRug {
         @GET("api")
@@ -168,21 +207,16 @@ class MainActivity : AppCompatActivity() {
         val thumbnail: String
     )
 
-    fun obtenerUsuarios(contexto: Context){
-        runOnUiThread { val refreshlayout = findViewById<SwipeRefreshLayout>(R.id.refreshLayout)
-            refreshlayout.setProgressBackgroundColorSchemeColor(Color.WHITE)
-            refreshlayout.setColorSchemeColors(Color.BLACK) }
-        val call = servicioRug.buscar(getString(R.string.str_cant_resultados))
-        runOnUiThread {
-            val refreshlayout = findViewById<SwipeRefreshLayout>(R.id.refreshLayout)
-            refreshlayout.setProgressBackgroundColorSchemeColor(Color.DKGRAY)
-            refreshlayout.setColorSchemeColors(Color.WHITE) }
+    fun obtenerUsuarios(callbackResultados: (ArrayList<UsuarioDC>) -> Unit)
+    {
+        Log.d("cosas", "buscando")
+        val call = servicioRug.buscar("50")
+        val listaUsuarios = ArrayList<UsuarioDC>()
 
         call.enqueue(object: Callback<ResultadoRug> {
             override fun onResponse(call: Call<ResultadoRug>, response: Response<ResultadoRug>) {
                 val resultado = response.body()
                 val resultados = resultado?.results
-                listaUsuarios = ArrayList()
 
                 if (resultados != null)
                 {
@@ -200,89 +234,17 @@ class MainActivity : AppCompatActivity() {
                         listaUsuarios.add(usuarioMapeo)
                     }
                 }
-                rvLista.scheduleLayoutAnimation()
-                adapterUsuario.actualizarLista(listaUsuarios)
-                val refreshLayout = findViewById<SwipeRefreshLayout>(R.id.refreshLayout)
-                refreshLayout.isRefreshing = false
+                //rvLista.scheduleLayoutAnimation()
+                //adapterUsuario.actualizarLista(listaUsuarios)
+                //refreshLayout.isRefreshing = false
+                callbackResultados(listaUsuarios)
             }
             override fun onFailure(call: Call<ResultadoRug>, t: Throwable) {
-                Toast.makeText(contexto, "Error: ${t.localizedMessage}", Toast.LENGTH_LONG).show()
-                Log.e("Error", "Error: " + t.localizedMessage)
+                Log.d("Error", "Error: " + t.localizedMessage)
             }
         })
+        Log.d("cosas", "return ${listaUsuarios.size}")
     }
-    //endregion
-
-    //region Datos -------------------------------------------------------------------------------------------------
-    var listaUsuarios = ArrayList<UsuarioDC>()
-
-    data class UsuarioDC(
-        var fotoChica: String = "",
-        var nombre: String = "",
-        var edad: String = "",
-        var pais: String = "",
-        var correo: String = "",
-        var numero: String = "",
-        var codigoPostal: String = "",
-        var fotoGrande: String = "",
-    )
-
-    //endregion
-
-    //region Cosas del recycler view ---------------------------------------------------------------------------------
-    lateinit var adapterUsuario: UsuarioAdapter
-    lateinit var rvLista: RecyclerView
-
-    class UsuarioAdapter(private val contexto: Context) : RecyclerView.Adapter<UsuarioVH>() {
-
-        var usuarios = listOf<UsuarioDC>()
-
-        fun actualizarLista(nuevaLista: List<UsuarioDC>){
-            usuarios = nuevaLista
-            notifyDataSetChanged()
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UsuarioVH {
-            val view = LayoutInflater
-                .from(parent.context)
-                .inflate(R.layout.item_lista, parent, false)
-            return UsuarioVH(view)
-        }
-
-        override fun onBindViewHolder(holder: UsuarioVH, position: Int) {
-            val usuario = usuarios[position]
-
-            holder.tvNombre.text = usuario.nombre
-            holder.tvEdad.text = usuario.edad + " " + contexto.getString(R.string.anios_str)
-            holder.tvPais.text = contexto.getString(R.string.pais_str) + " " + usuario.pais
-            Glide.with(contexto).load(usuario.fotoChica).transition(DrawableTransitionOptions.withCrossFade()).centerCrop().into(holder.ivImagen)
-
-            holder.itemView.setOnClickListener(object : View.OnClickListener {
-                override fun onClick(v: View?) {
-                    val intent = Intent(contexto, ActivityDetalle::class.java)
-                    intent.putExtra("nombre", usuario.nombre)
-                    intent.putExtra("edad", usuario.edad)
-                    intent.putExtra("pais", usuario.pais)
-                    intent.putExtra("correo", usuario.correo)
-                    intent.putExtra("numero", usuario.numero)
-                    intent.putExtra("codigoPostal", usuario.codigoPostal)
-                    intent.putExtra("fotoGrande", usuario.fotoGrande)
-                    startActivity(contexto, intent, null)
-                }
-            })
-        }
-
-        override fun getItemCount(): Int {
-            return usuarios.size
-        }
-    }
-
-    class UsuarioVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val tvNombre: TextView = itemView.findViewById(R.id.textViewNombre)
-        val tvPais: TextView = itemView.findViewById(R.id.textViewPais)
-        val tvEdad = itemView.findViewById<TextView>(R.id.textViewEdad)
-        val ivImagen = itemView.findViewById<ImageView>(R.id.imageView)
-    }
-
-    //endregion
 }
+
+//endregion

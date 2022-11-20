@@ -2,7 +2,6 @@
     <string name="app_name">Tp2</string>
     <string name="anios_str">years old</string>
     <string name="pais_str">From"</string>
-    <string name="str_cant_resultados">50</string>
     <string name="str_cp">Postal code</string>
     <string name="str_intent_err_mail">No mail app installed</string>
     <string name="str_intent_err_tel">No phone app installed</string>
