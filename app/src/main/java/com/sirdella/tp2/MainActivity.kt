@@ -19,6 +19,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Query
+import kotlin.concurrent.thread
 import kotlin.coroutines.coroutineContext
 
 class MainActivity : AppCompatActivity() {
@@ -58,6 +59,7 @@ class MainActivity : AppCompatActivity() {
 
 //region ViewModel ----------------------------------------------------------------------------------
 class viewModel():ViewModel(){
+
     val repoUsuarios = claseServicioRug()
 
     private val _recargando = MutableLiveData<Boolean>()
@@ -65,6 +67,10 @@ class viewModel():ViewModel(){
 
     private val _listaUsuariosLD = MutableLiveData<ArrayList<UsuarioDC>>()
     val listaUsuariosLD: LiveData<ArrayList<UsuarioDC>> = _listaUsuariosLD
+
+    init {
+        actualizarUsuarios()
+    }
 
     fun actualizarUsuarios(){
         _recargando.value = true
@@ -209,41 +215,44 @@ class claseServicioRug {
 
     fun obtenerUsuarios(callbackResultados: (ArrayList<UsuarioDC>) -> Unit)
     {
-        Log.d("cosas", "buscando")
-        val call = servicioRug.buscar("50")
-        val listaUsuarios = ArrayList<UsuarioDC>()
+        thread {
+            Log.d("cosas", "buscando")
+            val call = servicioRug.buscar("50")
+            val listaUsuarios = ArrayList<UsuarioDC>()
 
-        call.enqueue(object: Callback<ResultadoRug> {
-            override fun onResponse(call: Call<ResultadoRug>, response: Response<ResultadoRug>) {
-                val resultado = response.body()
-                val resultados = resultado?.results
+            call.enqueue(object : Callback<ResultadoRug> {
+                override fun onResponse(
+                    call: Call<ResultadoRug>,
+                    response: Response<ResultadoRug>
+                ) {
+                    val resultado = response.body()
+                    val resultados = resultado?.results
 
-                if (resultados != null)
-                {
-                    for(usuario in resultados)
-                    {
-                        val usuarioMapeo = UsuarioDC()
-                        usuarioMapeo.codigoPostal = usuario.location.postcode.toString()
-                        usuarioMapeo.correo = usuario.email
-                        usuarioMapeo.edad = usuario.dob.age.toString()
-                        usuarioMapeo.nombre = usuario.name.first + " " + usuario.name.last
-                        usuarioMapeo.fotoChica = usuario.picture.medium
-                        usuarioMapeo.fotoGrande = usuario.picture.large
-                        usuarioMapeo.pais = usuario.location.country
-                        usuarioMapeo.numero = usuario.phone
-                        listaUsuarios.add(usuarioMapeo)
+                    if (resultados != null) {
+                        for (usuario in resultados) {
+                            val usuarioMapeo = UsuarioDC()
+                            usuarioMapeo.codigoPostal = usuario.location.postcode.toString()
+                            usuarioMapeo.correo = usuario.email
+                            usuarioMapeo.edad = usuario.dob.age.toString()
+                            usuarioMapeo.nombre = usuario.name.first + " " + usuario.name.last
+                            usuarioMapeo.fotoChica = usuario.picture.medium
+                            usuarioMapeo.fotoGrande = usuario.picture.large
+                            usuarioMapeo.pais = usuario.location.country
+                            usuarioMapeo.numero = usuario.phone
+                            listaUsuarios.add(usuarioMapeo)
+                        }
                     }
+                    //rvLista.scheduleLayoutAnimation()
+                    //adapterUsuario.actualizarLista(listaUsuarios)
+                    //refreshLayout.isRefreshing = false
+                    callbackResultados(listaUsuarios)
                 }
-                //rvLista.scheduleLayoutAnimation()
-                //adapterUsuario.actualizarLista(listaUsuarios)
-                //refreshLayout.isRefreshing = false
-                callbackResultados(listaUsuarios)
-            }
-            override fun onFailure(call: Call<ResultadoRug>, t: Throwable) {
-                Log.d("Error", "Error: " + t.localizedMessage)
-            }
-        })
-        Log.d("cosas", "return ${listaUsuarios.size}")
+
+                override fun onFailure(call: Call<ResultadoRug>, t: Throwable) {
+                    Log.d("Error", "Error: " + t.localizedMessage)
+                }
+            })
+        }
     }
 }
 

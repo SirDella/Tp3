@@ -37,11 +37,8 @@ class fragment_lista : Fragment() {
         adapterUsuario = UsuarioAdapter(this.requireContext(), callbackClick = {
             (activity as MainActivity).mostrarDetalle(it)
             ocultarTeclado()
-
         })
         rvLista.adapter = adapterUsuario
-
-
 
         //EditText:
         val etFiltro = view.findViewById<EditText>(R.id.EditTextFiltro)
@@ -65,6 +62,12 @@ class fragment_lista : Fragment() {
         viewmodel.recargando.observe(viewLifecycleOwner){
             refreshLayout.isRefreshing = it
         }
+
+        /*
+        if (viewmodel.listaUsuariosLD.value == null){
+            viewmodel.actualizarUsuarios()
+        }
+         */
     }
 
     private fun filtrar(busqueda: String, lista: ArrayList<UsuarioDC>?): ArrayList<UsuarioDC> {
